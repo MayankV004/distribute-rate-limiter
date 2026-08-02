@@ -32,7 +32,7 @@ local overlap  = (window_ms - elapsed) / window_ms
 local estimate = prev * overlap + curr
 
 if estimate + cost <= limit then
-    redis.call('INCR', KEYS[1])
+    redis.call('INCRBY', KEYS[1], cost)
     -- TTL is 2× window so the previous-window key stays alive while it is still needed.
     redis.call('PEXPIRE', KEYS[1], ttl)
     redis.call('PEXPIRE', KEYS[2], ttl)

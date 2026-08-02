@@ -1,21 +1,57 @@
 package tier
 
-// TODO (Phase 4): implement CachedResolver.
-//
-//   type CachedResolver struct {
-//       inner Resolver
-//       cache sync.Map      // identity → cachedEntry{tier, expiresAt}
-//       ttl   time.Duration
-//   }
-//
-//   func NewCached(inner Resolver, ttl time.Duration) *CachedResolver
-//
-//   func (r *CachedResolver) Resolve(ctx context.Context, identity string) (string, error)
-//     1. Check cache for identity; if fresh, return cached tier
-//     2. Call r.inner.Resolve(ctx, identity)
-//     3. On success: cache the result with expiresAt = now + ttl
-//     4. On ErrUnknown: do NOT cache — a newly-issued key should be found promptly
-//
-// Purpose: allows swapping in a DB-backed resolver in future without changing
-// the interface. The static resolver used in this project doesn't need caching,
-// but wrapping it demonstrates the pattern and keeps Phase 4 extensible.
+import (
+	"context"
+	"sync"
+	"time"
+)
+
+type cachedEntry struct {
+	tier      string
+	expiresAt time.Time
+}
+
+// CachedResolver wraps an inner Resolver and caches its results for a TTL.
+// It uses a sync.Map for concurrent access and caches only successful resolutions.
+type CachedResolver struct {
+	inner Resolver
+	cache sync.Map
+	ttl   time.Duration
+}
+
+// NewCached returns a new CachedResolver wrapping the given inner resolver.
+func NewCached(inner Resolver, ttl time.Duration) *CachedResolver {
+	return &CachedResolver{
+		inner: inner,
+		ttl:   ttl,
+	}
+}
+
+// Resolve looks up the identity in the cache first. If found and fresh, it returns
+// the cached tier. Otherwise, it delegates to the inner resolver and caches the
+// successful result. It does NOT cache ErrUnknown.
+func (r *CachedResolver) Resolve(ctx context.Context, identity string) (string, error) {
+	// 1. Check cache
+	if val, ok := r.cache.Load(identity); ok {
+		entry := val.(cachedEntry)
+		if time.Now().Before(entry.expiresAt) {
+			return entry.tier, nil
+		}
+		// expired, clean up (optional, but good practice if we don't want it sitting around)
+		r.cache.Delete(identity)
+	}
+
+	// 2. Call inner
+	tier, err := r.inner.Resolve(ctx, identity)
+	if err != nil {
+		return "", err
+	}
+
+	// 3. Cache on success
+	r.cache.Store(identity, cachedEntry{
+		tier:      tier,
+		expiresAt: time.Now().Add(r.ttl),
+	})
+
+	return tier, nil
+}

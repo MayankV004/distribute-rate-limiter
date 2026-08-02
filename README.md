@@ -1,153 +1,102 @@
-# Distributed Rate Limiter + API Gateway
+# Distributed Rate Limiter & Production API Gateway
 
-A production-grade stateless Go gateway enforcing configurable rate limits across multiple replicas, with four swappable algorithms (token bucket, sliding window log, sliding window counter, leaky bucket) backed by either local memory or Redis.
+A robust, production-grade stateless Go API Gateway enforcing configurable rate limits across multiple replicas. It features four swappable rate-limiting algorithms backed by either local memory or a distributed Redis cluster, complete with observability, circuit breaking, and a full suite of production middleware.
 
-## What makes this interesting
+## Features
 
-This isn't just HTTP middleware. The core problem is that **the same admission decision has to be correct** under:
+- **Distributed & Atomic:** Uses Redis Lua scripts (`EVALSHA`) to ensure strict global quota accuracy across $N$ gateway replicas without check-and-act race conditions.
+- **Config-Driven Routing:** Define routes, upstream proxies, rate limits, and authentication tiers entirely via YAML. Zero-downtime hot reloads via `SIGHUP`.
+- **Swappable Algorithms:** Token Bucket, Sliding Window Log, Sliding Window Counter (default), and Leaky Bucket. Swap between `local` (in-memory) and `redis` stores per-route.
+- **Production Middleware:** Built-in Panic Recovery, `log/slog` structured JSON logging, and UUID-based `X-Request-Id` tracing.
+- **Circuit Breaking:** Protects the gateway from Redis outages. Configurable Fail-Open (availability wins) or Fail-Closed (protection wins) fallback policies per route.
+- **L1 Caching:** Optional sub-millisecond in-process cache to reduce Redis load, with documented tradeoffs on quota accuracy.
+- **Observability:** Native Prometheus metrics (`/metrics`) exposing sub-millisecond histograms, decision counters, and circuit breaker states, complete with a pre-configured Grafana dashboard.
 
-1. Thousands of concurrent goroutines inside one process (mutexes, atomic ops)
-2. N processes racing against one Redis key (Lua scripts for atomicity)
+## Architecture Overview
 
-Two different concurrency domains, two different solutions, one interface. The local and distributed implementations share the `Limiter` contract so they can be A/B tested by config alone — that comparison is the punchline.
-
-## Project structure
-
+```text
+HTTP Request
+    │
+    ▼
+[ Nginx Load Balancer ]
+    │
+    ▼ (Round Robin)
+[ Gateway Replica 1..N ]
+    │   1. Recover (Panic Handling)
+    │   2. RequestID (Inject UUID)
+    │   3. Logger (slog JSON)
+    │   4. RateLimit Middleware 
+    │       a. Identity Extractor (API Key, JWT, IP)
+    │       b. Tier Resolver (Free, Pro, etc.)
+    │       c. Limiter.Allow() → Atomic Redis Lua Script
+    │
+    ├── DENIED → 429 Too Many Requests (with X-RateLimit & Retry-After headers)
+    │
+    └── ALLOWED
+            │
+            ▼
+    [ Reverse Proxy ] → Upstream Backend Server
 ```
-rate-limiter/
-├── cmd/
-│   ├── gateway/        # Wire config → limiter → proxy → server
-│   └── backend/        # Dummy upstream for testing
-├── internal/
-│   ├── limiter/        # ← The contract: Limiter interface + Decision + Spec
-│   │   ├── local/      # Single-process implementations (mutex-based)
-│   │   └── distributed/# Redis-backed implementations (Lua scripts)
-│   ├── config/         # YAML + validation
-│   ├── identity/       # Extract client ID from IP/API-key/JWT
-│   ├── breaker/        # Circuit breaker around Redis
-│   ├── middleware/     # Rate limit + headers + logging + recovery
-│   ├── proxy/          # ReverseProxy to upstream
-│   ├── metrics/        # Prometheus collectors
-│   └── server/         # Graceful shutdown, /healthz
-├── configs/            # Committed reference configs
-├── deployments/        # docker-compose: nginx LB → 3 gateways → redis
-├── docs/               # IMPLEMENTATION_PLAN.md, ARCHITECTURE.md, ALGORITHMS.md
-└── test/
-    ├── integration/    # Real Redis via testcontainers
-    └── load/           # vegeta scripts for Phase 8 experiments
-```
 
-## Quickstart
+## Running the Project
+
+The entire system is orchestrated via Docker Compose.
+
+### 1. Start the Infrastructure
+Start the Nginx load balancer, 3 Gateway replicas, Redis, Prometheus, Grafana, and the Dummy Backend:
 
 ```bash
-# Phase 0 check
-make help
-
-# Once Phase 1 is done:
-make test       # Unit tests, fake clock
-make race       # The 1000-goroutine correctness test
-
-# Once Phase 2 is done:
-make run        # Single gateway on :8080, dummy backend on :9000
-
-# Once Phase 8 is done:
-make up         # Full stack: 3 gateways + redis + prometheus + grafana
-curl -H "X-API-Key: free_tier_key" http://localhost/api/v1/search
-make down
+docker compose -f deployments/docker-compose.yaml up -d --build
 ```
 
-## The contract (write this first, everything else conforms)
-
-```go
-type Decision struct {
-    Allowed    bool
-    Limit      int64
-    Remaining  int64
-    ResetAfter time.Duration
-    RetryAfter time.Duration
-}
-
-type Limiter interface {
-    Allow(ctx context.Context, key string, cost int64) (Decision, error)
-}
+### 2. Verify it works
+Send a request using an API key mapped to the `free` tier:
+```bash
+curl -i -H "X-API-Key: key_free_example" http://localhost/api/v1/search
+```
+You should see `200 OK` along with injected tracing and rate-limiting headers:
+```http
+X-Ratelimit-Limit: 100
+X-Ratelimit-Remaining: 99
+X-Request-Id: <uuid>
 ```
 
-Two deliberate choices:
+### 3. View the Grafana Dashboard
+1. Open [http://localhost:3000](http://localhost:3000) in your browser.
+2. Log in with `admin` / `admin`.
+3. Navigate to **Dashboards > Rate Limiter Dashboard** to see live traffic, latency histograms, and circuit breaker health.
 
-- `cost int64` lets expensive endpoints charge more without changing the signature.
-- `error` separate from `Allowed == false` is what allows fail-open/fail-closed to be a **middleware policy** rather than behaviour buried in each limiter.
+## Load Testing & Benchmarks
 
-## Success criteria
+We use [Vegeta](https://github.com/tsenart/vegeta) for rigorous load testing to prove correctness and measure the "Honest Cost" of network distribution. 
 
-| # | What | How it's proven |
-|---|---|---|
-| S1 | Four algorithms swappable by config | No recompile between token-bucket and sliding-window-counter |
-| S2 | Exactly `limit` pass when 1000 goroutines hit one key | `go test -race` assertion, not eyeballing |
-| S3 | 3 replicas enforce one global limit, not 3x | Phase 8 experiment A: local vs redis under identical load |
-| S4 | Measured p50/p95/p99 added latency | Phase 8 experiment B: vegeta, published honestly |
-| S5 | Redis outage degrades per policy, never hangs | `docker compose pause redis` under load |
+### Experiment A: Correctness
+Fires a massive burst of concurrent traffic across all 3 gateways to ensure Redis perfectly synchronizes the quota without race conditions.
 
-## Phased build
+```bash
+# Run the automated correctness test
+./scratch/exp_a.sh
+```
 
-Each phase delivers something runnable and testable. No phase depends on a later one.
+### Experiment B: Latency Stress Test
+Ramps traffic from 100 up to 1,000 Requests Per Second, comparing the sub-millisecond overhead of the `local` in-memory store vs the `redis` distributed store.
 
-- **Phase 0:** Scaffold (go.mod, Makefile, config loader, /healthz) — *you are here*
-- **Phase 1:** Local limiters + the test harness (fake clock, race test)
-- **Phase 2:** Gateway shell (chi, ReverseProxy, 429 + headers)
-- **Phase 3:** Redis + Lua (the core: atomic scripts, integration tests)
-- **Phase 4:** Config-driven routes and tiers
-- **Phase 5:** Circuit breaker + fail-open/closed per route
-- **Phase 6:** Prometheus metrics + Grafana dashboard
-- **Phase 7:** Optional L1 cache (with honest over-admission measurement)
-- **Phase 8:** Prove it (nginx → 3 gateways, vegeta load test, write up the numbers)
+```bash
+# Run the automated latency benchmark
+./scratch/exp_b.sh
+```
 
-Full plan in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+### Manual Load Testing
+To manually assault the gateway with Vegeta (e.g. 5,000 RPS for 5 seconds):
+```bash
+echo "GET http://localhost:80/api/v1/search" | ~/go/bin/vegeta attack -rate=5000 -duration=5s -header="X-API-Key: key_free_example" | ~/go/bin/vegeta report -type=text
+```
+*Note: Watch the Grafana dashboard in real-time while running this!*
 
-## Tech stack
+## Project Status
+**COMPLETE.** All 8 educational phases and the final Production API Gateway upgrades have been successfully implemented, tested, and benchmarked. 
 
-- **Go 1.22+** — goroutines, `sync.Map`, `-race`, `httputil.ReverseProxy` in stdlib
-- **chi** — thin router, middleware-friendly
-- **go-redis/v9** — `redis.Script` handles EVALSHA fallback automatically
-- **koanf** — YAML + env config
-- **Prometheus + Grafana** — observability
-- **testcontainers** — integration tests against real Redis
-- **vegeta** — load generation
-
-## The algorithms (tradeoff table)
-
-| Algorithm | Memory | Accuracy | Burst | Redis state | Default for |
-|---|---|---|---|---|---|
-| Token bucket | O(1) | Good | Allows burst to capacity | `HASH` | Per-user quotas |
-| Sliding window log | O(requests) | Exact | None | `ZSET` | Low-volume, high-value |
-| Sliding window counter | O(1) | Approximate | Mild | 2x `STRING` | **General default** |
-| Leaky bucket | O(1) + queue | Exact rate | Absorbs | `HASH` | Fragile downstreams |
-
-See [`docs/ALGORITHMS.md`](docs/ALGORITHMS.md) for state diagrams and why sliding-window-counter is the production choice.
-
-## Key design decisions
-
-1. **Lua scripts for atomicity.** Check-and-decrement is a race across nodes. `WATCH`/`MULTI` retries degrade under contention on hot keys; Lua runs atomically with no interleaving.
-
-2. **Fail-open vs fail-closed is per route.** `/api/v1/public/*` can fail open (availability wins); `/api/v1/payments/*` fails closed (protection wins). A single global flag is the common mistake.
-
-3. **Hash-tagged keys before Cluster.** `ratelimit:{user123}:GET:/api/v1/orders` — only the braced part is hashed, so every key for one identity lands in one Redis Cluster slot. Retrofitting a key format across live traffic is painful; design for it now.
-
-4. **Fake clock for tests.** Every algorithm is time-dependent. Testing with `time.Sleep` produces suites that are slow and flaky. A fake clock makes a "wait one minute" test instant and deterministic.
-
-5. **L1 cache is a tradeoff.** Short-TTL local allow-cache cuts Redis calls but over-admits. Phase 7 measures both the speedup **and** the over-admission — reporting the first without the second would be dishonest.
-
-## Interview talking points this produces
-
-- Why sliding window counter is the default: fixed memory, bounded error, no adversarial blowup.
-- Why the atomic unit is a Lua script, not `GET` + `DECR`.
-- Why fail-open/fail-closed is per route: different risk profiles.
-- Why hash tags matter before you need Cluster.
-- The L1 cache tradeoff, with measured numbers.
+For a deep dive into the architecture and decisions, read the [Learning Guide](LearningGuide.md) and the [Benchmarks Report](docs/BENCHMARKS.md).
 
 ## License
-
 MIT
-
-## Status
-
-**Phase 0 scaffold in progress.** The `Limiter` interface, `Clock`, and `Decision` helpers are written; `go test` is green. Next: Phase 1 local implementations + the race test.

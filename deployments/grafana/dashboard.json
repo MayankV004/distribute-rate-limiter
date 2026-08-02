@@ -1,8 +1,91 @@
 {
-  "__inputs": [],
-  "__requires": [],
   "title": "Rate Limiter Dashboard",
-  "description": "TODO (Phase 6): replace with exported Grafana dashboard JSON. Panels to include: allow/deny rate, store latency p50/p95/p99, circuit breaker state, fallback rate, upstream latency.",
-  "panels": [],
-  "schemaVersion": 38
+  "schemaVersion": 38,
+  "panels": [
+    {
+      "title": "Decisions Rate (Allow/Deny)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ratelimit_decisions_total[1m])) by (decision)",
+          "legendFormat": "{{decision}}"
+        }
+      ]
+    },
+    {
+      "title": "Store Latency (p99)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(ratelimit_store_latency_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "title": "Circuit Breaker State",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "ratelimit_breaker_state",
+          "legendFormat": "{{name}}"
+        }
+      ]
+    },
+    {
+      "title": "Store Errors Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ratelimit_store_errors_total[1m])) by (kind)",
+          "legendFormat": "{{kind}}"
+        }
+      ]
+    },
+    {
+      "title": "Fallback Rate",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ratelimit_fallback_total[1m])) by (policy)",
+          "legendFormat": "{{policy}}"
+        }
+      ]
+    }
+  ],
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "refresh": "5s"
 }

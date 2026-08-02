@@ -22,21 +22,35 @@ identity:
   order: ["api_key", "ip"]
   api_key_header: "X-API-Key"
   trusted_proxy_cidrs: ["127.0.0.1/32"]
+  default_tier: "free"
+  unknown_key_policy: "default_tier"
+
+api_keys:
+  "key_free_123": "free"
+  "key_pro_456": "pro"
 
 tiers:
   free:
-    limit: 10
-    window: 1m
-    burst: 3
+    limit: 2
+    window: 10s
+    burst: 2
   pro:
     limit: 100
     window: 1m
     burst: 20
 
 routes:
+  - pattern: "/api/v1/search"
+    methods: ["GET"]
+    algorithm: sliding_window_counter
+    store: local
+    cost: 2
+    fallback: closed
+    upstream: "http://localhost:9000"
+
   - pattern: "/api/v1/*"
     algorithm: token_bucket
-    store: local             # local store for Phase 0/1, switch to redis for Phase 3
+    store: local
     cost: 1
     fallback: open
     upstream: "http://localhost:9000"

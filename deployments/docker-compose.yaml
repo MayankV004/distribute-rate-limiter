@@ -11,21 +11,30 @@ services:
 
   gateway1:
     build: { context: .., dockerfile: deployments/Dockerfile }
+    entrypoint: ["/gateway", "/configs/gateway.yaml"]
     environment: [GATEWAY_REDIS_ADDRS=redis:6379]
+    volumes:
+      - "../configs/gateway.yaml:/configs/gateway.yaml:ro"
     ports: ["8080:8080"]   # proxy port published externally
     expose: ["9090"]       # G8: metrics port internal only; Prometheus scrapes it on the docker network
     depends_on: [redis]
 
   gateway2:
     build: { context: .., dockerfile: deployments/Dockerfile }
+    entrypoint: ["/gateway", "/configs/gateway.yaml"]
     environment: [GATEWAY_REDIS_ADDRS=redis:6379]
+    volumes:
+      - "../configs/gateway.yaml:/configs/gateway.yaml:ro"
     ports: ["8081:8080"]
     expose: ["9090"]       # G8: not published
     depends_on: [redis]
 
   gateway3:
     build: { context: .., dockerfile: deployments/Dockerfile }
+    entrypoint: ["/gateway", "/configs/gateway.yaml"]
     environment: [GATEWAY_REDIS_ADDRS=redis:6379]
+    volumes:
+      - "../configs/gateway.yaml:/configs/gateway.yaml:ro"
     ports: ["8082:8080"]
     expose: ["9090"]       # G8: not published
     depends_on: [redis]
@@ -42,9 +51,10 @@ services:
     ports: ["8474:8474", "26379:26379"]   # 8474=API, 26379=Redis proxy port
     depends_on: [redis]
 
-  backend:
+  dummy-backend:
     build: { context: .., dockerfile: deployments/Dockerfile }
-    command: ["/gateway"]  # TODO: replace with cmd/backend binary
+    entrypoint: ["/backend"]
+    command: ["-addr", ":9000"]
     ports: ["9000:9000"]
 
   prometheus:
@@ -54,7 +64,9 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    volumes: ["./grafana:/etc/grafana/provisioning/dashboards"]
+    volumes: 
+      - "./grafana:/etc/grafana/provisioning/dashboards"
+      - "./grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml"
     ports: ["3000:3000"]
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true

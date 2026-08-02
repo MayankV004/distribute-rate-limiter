@@ -1,21 +1,20 @@
 package identity
 
-// TODO (Phase 2): implement Redis key builder.
+import (
+	"fmt"
+)
+
+// BuildKey constructs the canonical Redis key for a rate limiter bucket.
 //
-//   func BuildKey(identity, method, routePattern, algorithm string) string
+// Format: ratelimit:{identity}:<method>:<pattern>:<algorithm>:<tier>
+// Example: ratelimit:{key_abc}:GET:/api/v1/search:swc:pro
 //
-// Key format (from plan § 4):
-//   ratelimit:{<identity>}:<method>:<route-pattern>:<algorithm>
-//   e.g. ratelimit:{key_9f3a1b}:GET:/api/v1/orders:swc
-//
-// Rules:
-//   - Hash tag {identity} is mandatory for Redis Cluster correctness.
-//     Only the braced part is used for slot assignment, so all keys for one
-//     identity land in one slot, enabling future multi-key operations.
-//   - Use the route pattern (e.g. /api/v1/orders/{id}), NOT the raw path,
-//     so /orders/1 and /orders/2 share the same bucket.
-//   - Abbreviate algorithm names in the key to avoid bloat:
-//       token_bucket            → tb
-//       sliding_window_log      → swl
-//       sliding_window_counter  → swc
-//       leaky_bucket            → lb
+// The {identity} is a Redis Cluster Hash Tag. It ensures that all keys
+// for the same identity are mapped to the same Redis Cluster slot.
+func BuildKey(identity, method, pattern, algorithm, tier string) string {
+	// If method is empty (meaning "match all methods"), we use a wildcard character.
+	if method == "" {
+		method = "*"
+	}
+	return fmt.Sprintf("ratelimit:{%s}:%s:%s:%s:%s", identity, method, pattern, algorithm, tier)
+}
