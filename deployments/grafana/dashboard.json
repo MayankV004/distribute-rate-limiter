@@ -1,0 +1,8 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "title": "Rate Limiter Dashboard",
+  "description": "TODO (Phase 6): replace with exported Grafana dashboard JSON. Panels to include: allow/deny rate, store latency p50/p95/p99, circuit breaker state, fallback rate, upstream latency.",
+  "panels": [],
+  "schemaVersion": 38
+}

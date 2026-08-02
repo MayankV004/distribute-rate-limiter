@@ -1,0 +1,84 @@
+# Gateway reference configuration
+# See docs/IMPLEMENTATION_PLAN.md § 8 for field documentation.
+# Gap resolutions are called out inline — see § 13 for full rationale.
+
+server:
+  addr: ":8080"
+  metrics_addr: ":9090"
+  read_timeout: 5s
+  shutdown_grace: 15s
+  metrics_token: ""   # G8: empty = network controls only; set to a secret to require Bearer token
+
+redis:
+  addrs: ["redis:6379"]
+  pool_size: 100
+  dial_timeout: 200ms
+  command_timeout: 50ms
+  clock_drift_tolerance_ms: 500   # G3: Lua rejects now_ms if it drifts >500ms from Redis TIME; 0 disables
+
+breaker:
+  # G7: these are starting-point values, not experimentally derived.
+  # Phase 5 calibration experiment will replace them with measured numbers.
+  # See BENCHMARKS.md after Phase 5 completes.
+  error_ratio: 0.5
+  min_requests: 20
+  open_duration: 5s
+  half_open_successes: 3
+
+identity:
+  # jwt_sub is commented out because jwt.mode is "passthrough" below.
+  # To enable JWT identity: set jwt.mode to jwks_uri or hmac_secret first (G2).
+  order: ["api_key", "ip"]
+  api_key_header: "X-API-Key"
+  trusted_proxy_cidrs: ["10.0.0.0/8", "172.16.0.0/12"]
+  default_tier: free            # G1: tier assigned when key is not in api_keys map
+  unknown_key_policy: deny      # G1: "deny" | "default_tier"
+
+  # G2: JWT signature verification — REQUIRED when jwt_sub is in identity order.
+  # Remove jwt_sub from identity.order instead of using passthrough mode.
+  jwt:
+    mode: passthrough             # passthrough | jwks_uri | hmac_secret
+    # jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+    # audience: "api.example.com"
+    # jwks_refresh_interval: 1h
+    # hmac_secret_env: GATEWAY_JWT_SECRET   # env var containing HS256 secret
+
+# G1: maps API key strings → tier names.
+# Keys not listed here are handled by identity.unknown_key_policy.
+api_keys:
+  "key_free_example": free
+  "key_pro_example":  pro
+
+tiers:
+  free:
+    limit: 100
+    window: 1m
+    burst: 20
+  pro:
+    limit: 10000
+    window: 1m
+    burst: 2000
+
+routes:
+  - pattern: "/api/v1/search"
+    methods: ["GET"]
+    algorithm: sliding_window_counter
+    store: redis
+    cost: 2
+    fallback: closed
+    upstream: "http://backend:9000"
+    upstream_retries: 0   # G6: no retries by design; non-zero rejected by validation
+    l1_cache:             # G4: disabled by default so S3 (global limit) holds exactly
+      enabled: false
+      ttl: 5ms
+      remaining_threshold: 0.1
+
+  - pattern: "/api/v1/*"
+    algorithm: token_bucket
+    store: redis
+    cost: 1
+    fallback: open
+    upstream: "http://backend:9000"
+    upstream_retries: 0
+    l1_cache:
+      enabled: false

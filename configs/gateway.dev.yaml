@@ -1,0 +1,42 @@
+# Development config — localhost, verbose, low limits for manual curl testing.
+
+server:
+  addr: ":8080"
+  metrics_addr: ":9090"
+  read_timeout: 30s       # relaxed for debugging
+  shutdown_grace: 5s
+
+redis:
+  addrs: ["localhost:6379"]
+  pool_size: 10
+  dial_timeout: 500ms
+  command_timeout: 100ms
+
+breaker:
+  error_ratio: 0.8         # more tolerant in dev
+  min_requests: 5
+  open_duration: 3s
+  half_open_successes: 2
+
+identity:
+  order: ["api_key", "ip"]
+  api_key_header: "X-API-Key"
+  trusted_proxy_cidrs: ["127.0.0.1/32"]
+
+tiers:
+  free:
+    limit: 10
+    window: 1m
+    burst: 3
+  pro:
+    limit: 100
+    window: 1m
+    burst: 20
+
+routes:
+  - pattern: "/api/v1/*"
+    algorithm: token_bucket
+    store: local             # local store for Phase 0/1, switch to redis for Phase 3
+    cost: 1
+    fallback: open
+    upstream: "http://localhost:9000"

@@ -1,0 +1,31 @@
+# golangci-lint configuration
+# Run with: make lint
+
+run:
+  timeout: 5m
+  go: "1.22"
+
+linters:
+  enable:
+    - errcheck       # check error return values
+    - gosimple       # simplification suggestions
+    - govet          # go vet checks
+    - ineffassign    # detect ineffectual assignments
+    - staticcheck    # static analysis
+    - unused         # unused code
+    - gofmt          # formatting
+    - goimports      # import ordering
+    - revive         # drop-in replacement for golint
+    - exhaustive     # exhaustive switch statements on enums
+    - noctx          # detect HTTP requests without context
+
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+
+issues:
+  exclude-rules:
+    - path: "_test.go"
+      linters: [errcheck]    # test files allowed to ignore errors in defer/cleanup
