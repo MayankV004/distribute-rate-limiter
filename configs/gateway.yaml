@@ -55,16 +55,16 @@ tiers:
     window: 1m
     burst: 200
   pro:
-    limit: 1000000
+    limit: 25000
     window: 1m
-    burst: 1000000
+    burst: 5000
 
 routes:
   - pattern: "/api/v1/search"
     methods: ["GET"]
     algorithm: sliding_window_counter
     store: redis
-    cost: 2
+    cost: 1
     fallback: closed
     upstream: "http://dummy-backend:9000"
     upstream_retries: 0   # G6: no retries by design; non-zero rejected by validation

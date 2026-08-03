@@ -25,7 +25,7 @@ All tests were executed natively on a single laptop (**AMD Ryzen 5 5600H, 6-Core
 Verify that the rate-limiting algorithms correctly calculate tokens and weighted request costs across concurrent traffic without race conditions.
 
 ### Methodology
-Fired a burst of 500 Requests Per Second (RPS) for 2 seconds (1000 requests total) against a route configured with a limit of 100 requests per window, where each request has a `cost: 2`. 
+Fired a burst of 500 Requests Per Second (RPS) for 2 seconds (1000 requests total) against a route configured with a limit of 50 requests per window, where each request has a `cost: 1`. 
 
 ### Results
 | Storage Backend | Allowed (`200 OK`) | Rate Limited (`429`) | Accuracy |
@@ -33,7 +33,7 @@ Fired a burst of 500 Requests Per Second (RPS) for 2 seconds (1000 requests tota
 | **Local Store** | 50 | 950 | Passed (100% accurate per-node) |
 | **Redis Store** | 50 | 950 | Passed (100% accurate globally) |
 
-*Reasoning:* Because the cost was 2, exactly 50 requests were allowed (50 * 2 = 100 limit). The Redis Lua scripts successfully prevented double-counting across the 3 gateways.
+*Reasoning:* Because the cost was 1, exactly 50 requests were allowed to fulfill the 50 quota limit. The Redis Lua scripts successfully prevented double-counting across the 3 gateways.
 
 ---
 
@@ -65,13 +65,13 @@ Hit the gateway at exactly 1,000 RPS, comparing the latency of the `local` in-me
 Verify that Identity Extraction successfully maps different API keys to different quotas (e.g., Free vs. Pro tiers) and handles time-based token refills correctly during bursts.
 
 ### Methodology
-Fired 2,500 requests over 5 seconds at the Free Tier (limit: 1,000/min, cost: 2) and Pro Tier (limit: 25,000/min, cost: 2).
+Fired 2,500 requests over 5 seconds at the Free Tier (limit: 500/min, cost: 1) and Pro Tier (limit: 25,000/min, cost: 1).
 
 ### Results
 - **Free Tier:** 522 requests succeeded (20.88%). 
 - **Pro Tier:** 2,500 requests succeeded (100%).
 
-*Reasoning:* The Free Tier mathematically allows exactly 500 requests at `cost: 2`. Over the 5-second burst, the `sliding_window_counter` naturally regenerated roughly 22 additional tokens, resulting in exactly 522 allowed requests. The Pro Tier effortlessly absorbed the entire 2,500 request burst.
+*Reasoning:* The Free Tier mathematically allows exactly 500 requests at `cost: 1`. Over the 5-second burst, the `sliding_window_counter` naturally regenerated roughly 22 additional tokens, resulting in exactly 522 allowed requests. The Pro Tier effortlessly absorbed the entire 2,500 request burst.
 
 ---
 
