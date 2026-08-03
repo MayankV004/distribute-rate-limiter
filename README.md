@@ -56,8 +56,8 @@ curl -i -H "X-API-Key: key_free_example" http://localhost/api/v1/search
 ```
 You should see `200 OK` along with injected tracing and rate-limiting headers:
 ```http
-X-Ratelimit-Limit: 100
-X-Ratelimit-Remaining: 99
+X-Ratelimit-Limit: 1000
+X-Ratelimit-Remaining: 999
 X-Request-Id: <uuid>
 ```
 
@@ -71,36 +71,29 @@ X-Request-Id: <uuid>
 The project includes an advanced dual-testing strategy demonstrating both microbenchmarking and real-world simulation:
 
 #### 1. Vegeta: Microbenchmarking & Correctness
-Vegeta is used for constant-arrival-rate testing. It is perfect for proving algorithmic exactness (did exactly 100 requests pass?) and measuring raw latency overhead without masking slow server responses.
-- `scratch/exp_a.sh`: Tests raw local algorithms (no Redis).
+Vegeta is used for constant-arrival-rate testing. It is perfect for proving algorithmic exactness and measuring raw latency overhead without masking slow server responses.
+- `scratch/exp_a.sh`: Tests raw local algorithms (Correctness & Quota Accuracy).
 - `scratch/exp_b.sh`: Measures true p95 tail latency through the NGINX → Gateway → Redis stack.
-- `scratch/exp_c_tiers.sh`: Proves multi-tier quota limits (e.g., Free vs. Pro tiers) and sliding window burst logic.
-- `scratch/exp_d_chaos.sh`: Kills the Redis cluster mid-flight to prove instant Circuit Breaker fail-open capabilities.
+- `scratch/exp_c_tiers.sh`: Tests multi-tier quota limits (e.g., Free vs. Pro tiers) and sliding window burst logic at `1:1` costs.
+- `scratch/exp_d_chaos.sh`: Kills the Redis cluster mid-flight to prove instant Circuit Breaker fail-open capabilities (0 seconds of downtime).
+- `scratch/exp_f_max.sh`: The ultimate stress test. Slams the gateway with 5,000 Requests Per Second for 60 seconds (300,000 requests) to test TCP port exhaustion and NGINX worker connection limits.
 
 #### 2. k6: Real-World Scenario Simulation
 k6 is used for closed-model virtual user testing. It simulates messy, real-world traffic flows where users have "think time", mix different API keys, and hit various endpoints.
-- `scratch/k6_scenario.js`: A complex scenario ramping up to 50 concurrent virtual users. 80% use Free tier keys, 20% use Pro tier keys. 
+- `scratch/k6_scenario.js`: A complex scenario ramping up to 1,000 concurrent virtual users. 80% use Free tier keys, 20% use Pro tier keys. 
 - Run it via Docker using the wrapper script: `./scratch/exp_e_k6.sh`
 
+### How to Run the Tests
 ```bash
 # Run the automated correctness test
 ./scratch/exp_a.sh
-```
 
-### Experiment B: Latency Stress Test
-Ramps traffic from 100 up to 1,000 Requests Per Second, comparing the sub-millisecond overhead of the `local` in-memory store vs the `redis` distributed store.
-
-```bash
 # Run the automated latency benchmark
 ./scratch/exp_b.sh
-```
 
-### Manual Load Testing
-To manually assault the gateway with Vegeta (e.g. 5,000 RPS for 5 seconds):
-```bash
-echo "GET http://localhost:80/api/v1/search" | ~/go/bin/vegeta attack -rate=5000 -duration=5s -header="X-API-Key: key_free_example" | ~/go/bin/vegeta report -type=text
+# Run the 5,000 RPS Maximum Throughput test!
+./scratch/exp_f_max.sh
 ```
-*Note: Watch the Grafana dashboard in real-time while running this!*
 
 ## Project Status
 **COMPLETE.** All 8 educational phases and the final Production API Gateway upgrades have been successfully implemented, tested, and benchmarked. 
