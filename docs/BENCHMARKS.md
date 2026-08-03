@@ -56,7 +56,9 @@ Hit the gateway at exactly 1,000 RPS, comparing the latency of the `local` in-me
 *Reasoning:* The Redis network hop adds an **"Honest Cost" of ~200 microseconds (0.2ms)** to the p95 latency. Because we used atomic Lua scripting (`EVALSHA`) and highly optimized Go connection pooling, the overhead is virtually negligible, keeping the overall latency sub-millisecond.
 
 ---
-
+![alt text](image.png)
+![alt text](image-1.png)
+![alt text](image-2.png)
 ## Experiment C: Multi-Tier Quota Precision
 **Script:** `scratch/exp_c_tiers.sh`
 **Tool:** Vegeta
@@ -74,6 +76,7 @@ Fired 2,500 requests over 5 seconds at the Free Tier (limit: 500/min, cost: 1) a
 *Reasoning:* The Free Tier mathematically allows exactly 500 requests at `cost: 1`. Over the 5-second burst, the `sliding_window_counter` naturally regenerated roughly 22 additional tokens, resulting in exactly 522 allowed requests. The Pro Tier effortlessly absorbed the entire 2,500 request burst.
 
 ---
+![alt text](image-3.png)
 
 ## Experiment D: Chaos Testing (Fault Tolerance)
 **Script:** `scratch/exp_d_chaos.sh`
@@ -93,6 +96,7 @@ Ran a continuous 15-second load test at 100 RPS. Midway through the test, we for
 *Reasoning:* As soon as Redis failed, the custom Go Circuit Breaker tripped in less than a millisecond. Because the route was configured with `fallback: open`, the gateway bypassed the rate limiter entirely and allowed traffic to flow to the backend, resulting in **zero seconds of downtime** during the outage.
 
 ---
+![alt text](image-4.png)
 
 ## Experiment E: Real-World Scenario Simulation
 **Script:** `scratch/exp_e_k6.sh` & `scratch/k6_scenario.js`
@@ -117,7 +121,8 @@ Ramped up to **50 concurrent virtual users** executing a complex script:
 *Reasoning:* The k6 test perfectly modeled real-world behavior. The Free tier users organically hit their 1000/min limit and received `429`s, while Pro users continued. The system maintained a p95 latency of 1.52ms despite the chaotic, asynchronous nature of 50 virtual users connecting simultaneously.
 
 ---
-
+![alt text](image-5.png)
+![alt text](image-6.png)
 ## Experiment F: Maximum Throughput (The 5,000 RPS Barrier)
 **Script:** `scratch/exp_f_max.sh`
 **Tool:** Vegeta
@@ -132,7 +137,7 @@ Increased the Pro Tier limit to 1,000,000 tokens to prevent `429` responses, and
 - **Total Requests Processed (200 OK):** 93,072 
 - **Failed (`Status 0 - bind: address already in use`):** 105,701
 - **Failed (`Status 503`):** 20,797
-
+![alt text](image-7.png)
 ### Architectural Analysis: Why didn't it hit 300,000?
 The test revealed a brilliant system-level bottleneck. The Go code did **not** crash, and the CPU did **not** max out. We hit **TCP Port Exhaustion**. 
 
