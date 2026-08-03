@@ -66,12 +66,21 @@ X-Request-Id: <uuid>
 2. Log in with `admin` / `admin`.
 3. Navigate to **Dashboards > Rate Limiter Dashboard** to see live traffic, latency histograms, and circuit breaker health.
 
-## Load Testing & Benchmarks
+### Load Testing & Verification
 
-We use [Vegeta](https://github.com/tsenart/vegeta) for rigorous load testing to prove correctness and measure the "Honest Cost" of network distribution. 
+The project includes an advanced dual-testing strategy demonstrating both microbenchmarking and real-world simulation:
 
-### Experiment A: Correctness
-Fires a massive burst of concurrent traffic across all 3 gateways to ensure Redis perfectly synchronizes the quota without race conditions.
+#### 1. Vegeta: Microbenchmarking & Correctness
+Vegeta is used for constant-arrival-rate testing. It is perfect for proving algorithmic exactness (did exactly 100 requests pass?) and measuring raw latency overhead without masking slow server responses.
+- `scratch/exp_a.sh`: Tests raw local algorithms (no Redis).
+- `scratch/exp_b.sh`: Measures true p95 tail latency through the NGINX → Gateway → Redis stack.
+- `scratch/exp_c_tiers.sh`: Proves multi-tier quota limits (e.g., Free vs. Pro tiers) and sliding window burst logic.
+- `scratch/exp_d_chaos.sh`: Kills the Redis cluster mid-flight to prove instant Circuit Breaker fail-open capabilities.
+
+#### 2. k6: Real-World Scenario Simulation
+k6 is used for closed-model virtual user testing. It simulates messy, real-world traffic flows where users have "think time", mix different API keys, and hit various endpoints.
+- `scratch/k6_scenario.js`: A complex scenario ramping up to 50 concurrent virtual users. 80% use Free tier keys, 20% use Pro tier keys. 
+- Run it via Docker using the wrapper script: `./scratch/exp_e_k6.sh`
 
 ```bash
 # Run the automated correctness test

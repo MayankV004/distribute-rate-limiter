@@ -88,6 +88,9 @@ func RateLimitForRoute(
 				// Fallback == "open": allow the request to proceed (availability wins over protection)
 				metrics.DecisionsTotal.WithLabelValues(routeCfg.Pattern, tierName, routeCfg.Algorithm, "fail_open").Inc()
 				metrics.FallbackTotal.WithLabelValues(routeCfg.Pattern, "open").Inc()
+				
+				// CRITICAL FIX: Ensure the request is allowed to pass downstream
+				decision.Allowed = true
 			} else {
 				if decision.Allowed {
 					metrics.DecisionsTotal.WithLabelValues(routeCfg.Pattern, tierName, routeCfg.Algorithm, "allowed").Inc()

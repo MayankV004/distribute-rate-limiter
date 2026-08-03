@@ -31,13 +31,13 @@ api_keys:
 
 tiers:
   free:
-    limit: 2
-    window: 10s
-    burst: 2
-  pro:
-    limit: 100
+    limit: 1000
     window: 1m
-    burst: 20
+    burst: 200
+  pro:
+    limit: 25000
+    window: 1m
+    burst: 5000
 
 routes:
   - pattern: "/api/v1/search"
