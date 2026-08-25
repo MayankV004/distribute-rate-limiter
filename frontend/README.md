@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Distributed Rate Limiter - Frontend Dashboard & Topology Simulator
 
-## Getting Started
+An interactive, real-time visualizer and simulation dashboard built with **Next.js 15 (App Router)**, **TypeScript**, and **Tailwind CSS**. It provides live node topology tracking, customizable traffic generation, and real-time metric visualization for the Go Distributed Rate Limiter API Gateway.
 
-First, run the development server:
+---
+
+## 🔗 Quick Links
+
+- 🏠 **[Root Monorepo README](file:///home/streamliner/rate-liimter/README.md)**
+- ⚙️ **[Backend API Gateway README](file:///home/streamliner/rate-liimter/backend/README.md)**
+
+---
+
+## 🎨 Overview & Key Features
+
+- **Interactive Topology Canvas**: Real-time canvas visualizing client requests flowing through the Nginx Load Balancer, distributed Go Gateway replicas, Redis rate limiter store, and upstream services.
+- **Live Traffic Generator**: Configurable slider controls to simulate variable traffic loads (RPS), trigger request bursts, and select API key tiers (`Free` vs `Pro`).
+- **Real-Time System Metrics**: High-frequency metric cards displaying throughput (RPS), total allowed vs rate-limited (429) requests, p95 latencies, and circuit breaker status.
+- **Node Detail Inspector**: Clickable system nodes opening detailed modals for node status, throughput history, and simulated logs.
+- **API Gateway Proxy Bridge**: Next.js Serverless API route (`/api/proxy-gateway`) bridging live traffic from the frontend to the Nginx gateway endpoint (`http://localhost/api/v1/search`).
+
+---
+
+## 🏗️ Directory Structure
+
+```text
+frontend/
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx              # Root layout & theme providers
+│   │   ├── page.tsx                # Main Visualizer Dashboard page
+│   │   ├── docs/page.tsx           # Architecture documentation view
+│   │   └── api/
+│   │       └── proxy-gateway/      # Proxy route executing live requests against Go Gateway
+│   ├── components/
+│   │   ├── TopologyCanvas.tsx      # Canvas renderer for network node graph & animations
+│   │   ├── TrafficController.tsx   # Controls for RPS sliders, key tiers, and burst simulation
+│   │   ├── StatsGrid.tsx           # Live metric cards (RPS, 200s, 429s, Latency)
+│   │   ├── ScalingSection.tsx      # Gateway replica scaling and load balance distribution
+│   │   ├── NodeDetailModal.tsx     # Inspection modal for individual system nodes
+│   │   ├── Navbar.tsx              # Application header & navigation links
+│   │   └── DocsSection.tsx         # Embedded documentation viewer
+│   └── context/
+│       └── ThemeContext.tsx        # System-wide dark/light theme management
+├── public/                         # Static assets & icons
+└── package.json                    # Project dependencies & scripts
+```
+
+---
+
+## 🚀 Getting Started
+
+### 1. Install Dependencies
+
+Ensure you have Node.js 18+ installed:
+
+```bash
+npm install
+```
+
+### 2. Run Development Server
+
+Launch the Next.js development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> **Note:** Ensure the backend infrastructure (`docker compose -f ../backend/deployments/docker-compose.yaml up -d`) is running to enable live API proxying.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Build for Production
 
-## Learn More
+```bash
+npm run build
+npm run start
+```
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🛠️ Tech Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS & CSS Modules
+- **Icons**: Lucide React
+- **Graphics**: HTML5 Canvas API
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📜 License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+[MIT](LICENSE)
