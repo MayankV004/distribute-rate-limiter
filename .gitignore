@@ -1,2 +1,23 @@
+# Binaries
 gateway
-backend
+bin/
+**/bin/
+backend/cmd/backend/backend
+backend/cmd/gateway/gateway
+
+# Go build & test artifacts
+*.test
+*.out
+
+# Node & Frontend
+node_modules/
+.next/
+out/
+build/
+.npm
+*.tsbuildinfo
+
+# OS & Editor
+.DS_Store
+*.swp
+*~
