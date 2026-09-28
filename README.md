@@ -8,12 +8,11 @@ A high-performance, fault-tolerant Go API Gateway enforcing atomic, distributed 
 
 ```text
 rate-limiter/
-├── backend/          # Go API Gateway, Redis Lua scripts, Docker Compose, Benchmarks
-│   ├── cmd/          # Gateway entry point & server initialization
-│   ├── internal/     # Core algorithms, middlewares, stores, circuit breaker
-│   ├── deployments/  # Docker Compose (Nginx, Gateway x3, Redis, Prometheus, Grafana)
-│   ├── docs/         # Architecture & Benchmark reports
-│   └── scratch/      # Vegeta & k6 load testing scripts (up to 5,000 RPS)
+├── cmd/              # Gateway entry point & server initialization
+├── internal/         # Core algorithms, middlewares, stores, circuit breaker
+├── deployments/      # Docker Compose (Nginx, Gateway x3, Redis, Prometheus, Grafana)
+├── docs/             # Architecture & Benchmark reports
+├── scratch/          # Vegeta & k6 load testing scripts (up to 5,000 RPS)
 └── frontend/         # Next.js Dashboard & Topology Simulator
     └── src/          # Interactive canvas, traffic controller, stats dashboard
 ```
@@ -55,7 +54,7 @@ rate-limiter/
 Navigate to the root directory and start all services via Docker Compose:
 
 ```bash
-docker compose -f backend/deployments/docker-compose.yaml up -d
+docker compose -f deployments/docker-compose.yaml up -d
 ```
 
 This starts:
@@ -118,30 +117,30 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to interact 
 
 ## ⚡ Load Testing & Microbenchmarks
 
-The repository includes pre-configured Vegeta and k6 benchmark suites inside `backend/scratch/`:
+The repository includes pre-configured Vegeta and k6 benchmark suites inside `scratch/`:
 
 ```bash
 # Test local algorithm correctness & accuracy
-./backend/scratch/exp_a.sh
+./scratch/exp_a.sh
 
 # Measure tail latency (p95 / p99) under load
-./backend/scratch/exp_b.sh
+./scratch/exp_b.sh
 
 # Simulate Chaos Mode: Kills Redis mid-traffic to test Circuit Breaker fail-open policy
-./backend/scratch/exp_d_chaos.sh
+./scratch/exp_d_chaos.sh
 
 # High-Throughput Stress Test: 5,000 RPS for 60s
-./backend/scratch/exp_f_max.sh
+./scratch/exp_f_max.sh
 ```
 
 ---
 
 ## 📚 Documentation & Deep Dives
 
-- 📖 **[Backend Architecture & Guide](file:///home/streamliner/rate-liimter/backend/README.md)**: Details on rate-limiting algorithms, middleware chains, and Go package structure.
-- 🎓 **[Educational Learning Guide](file:///home/streamliner/rate-liimter/backend/LearningGuide.md)**: Deep dive into step-by-step phase implementations.
-- 📈 **[Performance Benchmarks Report](file:///home/streamliner/rate-liimter/backend/docs/BENCHMARKS.md)**: Detailed report on latency, concurrency limits, and Redis Lua performance.
-- 💻 **[Frontend README](file:///home/streamliner/rate-liimter/frontend/README.md)**: Frontend architecture details and Next.js configuration.
+- 📖 **[Backend Architecture & Guide](docs/ARCHITECTURE.md)**: Details on rate-limiting algorithms, middleware chains, and Go package structure.
+- 🎓 **[Educational Learning Guide](LearningGuide.md)**: Deep dive into step-by-step phase implementations.
+- 📈 **[Performance Benchmarks Report](docs/BENCHMARKS.md)**: Detailed report on latency, concurrency limits, and Redis Lua performance.
+- 💻 **[Frontend README](frontend/README.md)**: Frontend architecture details and Next.js configuration.
 
 ---
 

@@ -1,0 +1,7 @@
+# vegeta targets file — one target per line
+# Format: METHOD URL
+# TODO (Phase 8): add all routes under test
+
+GET http://localhost/api/v1/search
+GET http://localhost/api/v1/orders
+POST http://localhost/api/v1/items
